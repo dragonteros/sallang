@@ -1,0 +1,79 @@
+<html>
+    <header>
+        <title>히잉 형아 꼬리 살랑</title>
+    </header>
+    <body>
+        <div>
+            코드
+            <textarea id="code"></textarea>
+        </div>
+        <div>
+            입력 흐름
+            <textarea id="input"></textarea>
+        </div>
+        <button id="runButton">실행</button>
+        <div>
+            출력 흐름
+            <pre id="output"></pre>
+        </div>
+        <div>
+            <span>종료 코드:</span>
+            <span id="exitCode"></span>
+        </div>
+
+        <script>
+            let inputString = ""; // set by button
+            function setInput(s) {
+                inputString = s;
+            }
+
+            /** @type{number[]} */
+            let inputBuffer = [];
+            let pos = 0;
+            const encoder = new TextEncoder();
+            function read(addr) {
+                if (inputString !== "") {
+                    inputBuffer = Array.from(
+                        encoder.encode(inputString)
+                    )
+                    pos = 0;
+                    inputString = "";
+                }
+
+                if (pos >= inputBuffer.length) return -1;
+                const byte = inputBuffer[pos];
+                pos += 1;
+                return byte;
+            }
+
+            /** @type{number[]} */
+            let outputBuffer = [];
+            function write(addr, value) {
+                outputBuffer.push(value)
+            }
+            const decoder = new TextDecoder(); 
+            function flush() {
+                const decoded = decoder.decode(new Uint8Array(outputBuffer));
+                outputBuffer = [];
+                return decoded;
+            }
+        </script>
+        <script type="module">
+            import {run} from './src/main.js';
+            const code = document.getElementById('code');
+            const input = document.getElementById('input');
+            const output = document.getElementById('output');
+            const exitCode = document.getElementById('exitCode');
+
+            document.getElementById("runButton").addEventListener("click", function () {
+                setInput(input.value);
+
+                exitCode.innerText = '' + run(
+                    code.value, {read, write}
+                );
+
+                output.innerText = flush();
+            })
+        </script>
+    </body>
+</html>

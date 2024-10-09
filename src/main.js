@@ -1,6 +1,5 @@
-import {tokenize} from './tokenize';
-import {parse} from './parse';
-import {interpret} from './interpret';
+import {parse} from './parse.js';
+import {interpret} from './interpret.js';
 
 /**
  * Run the program
@@ -9,5 +8,5 @@ import {interpret} from './interpret';
  * @returns {number} exit code.
  */
 export function run(program, ioUtils) {
-    return interpret(parse(tokenize(program)), ioUtils)
+    return interpret(parse(program), ioUtils)
 }

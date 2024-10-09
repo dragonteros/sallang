@@ -1,79 +1,226 @@
-<html>
-    <header>
-        <title>히잉 형아 꼬리 살랑</title>
-    </header>
-    <body>
-        <div>
-            코드
-            <textarea id="code"></textarea>
-        </div>
-        <div>
-            입력 흐름
-            <textarea id="input"></textarea>
-        </div>
-        <button id="runButton">실행</button>
-        <div>
-            출력 흐름
-            <pre id="output"></pre>
-        </div>
-        <div>
-            <span>종료 코드:</span>
-            <span id="exitCode"></span>
-        </div>
+<!DOCTYPE html>
+<html lang="ko">
+<header>
+    <meta charset="utf-8">
+    <title>히잉 형아 꼬리 살랑</title>
+    <script language="javascript" type="text/javascript"
+        src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
 
-        <script>
-            let inputString = ""; // set by button
-            function setInput(s) {
-                inputString = s;
+    <link rel="stylesheet" type="text/css"
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css">
+    </link>
+    <style>
+        .hidden {
+            display: none;
+        }
+    </style>
+</header>
+
+<body>
+    <div>
+        코드
+        <textarea id="code" rows="30" cols="40"></textarea>
+    </div>
+    <div>
+        입력 흐름
+        <textarea id="input" rows="2" cols="40"></textarea>
+    </div>
+    <button id="runButton">실행</button>
+    <button id="runSingleButton">한 줄씩 실행</button>
+    <button id="stopButton">중지</button>
+    <div>
+        출력 흐름
+        <pre id="output"></pre>
+    </div>
+    <div>
+        <span>종료 코드:</span>
+        <span id="exitCode"></span>
+    </div>
+    <div id="stackWrapper">
+        스택
+        <pre id="stack"></pre>
+    </div>
+    <div id="memoryWrapper">
+        메모리
+        <pre id="memory"></pre>
+    </div>
+
+    <script type="module">
+        import { run } from './src/main.js';
+        import { parse } from './src/parse.js';
+        import { interpretSingle } from './src/interpret.js';
+        import { STACK_NAMES } from './src/constants.js';
+
+        let inputString = ""; // set by button
+        /**
+         * @param {string} s
+         */
+        function setInput(s) {
+            inputString = s;
+        }
+
+        /** @type{number[]} */
+        let inputBuffer = [];
+        let pos = 0;
+        const encoder = new TextEncoder();
+        function read(addr) {
+            if (inputString !== "") {
+                inputBuffer = Array.from(
+                    encoder.encode(inputString)
+                )
+                pos = 0;
+                inputString = "";
             }
 
-            /** @type{number[]} */
-            let inputBuffer = [];
-            let pos = 0;
-            const encoder = new TextEncoder();
-            function read(addr) {
-                if (inputString !== "") {
-                    inputBuffer = Array.from(
-                        encoder.encode(inputString)
-                    )
-                    pos = 0;
-                    inputString = "";
+            if (pos >= inputBuffer.length) return -1;
+            const byte = inputBuffer[pos];
+            pos += 1;
+            return byte;
+        }
+
+        /** @type{number[]} */
+        let outputBuffer = [];
+        function write(addr, value) {
+            outputBuffer.push(value)
+        }
+        function resetOutput() {
+            outputBuffer = [];
+        }
+        const ioUtils = { read, write }
+
+        const decoder = new TextDecoder();
+        function updateOutput() {
+            return decoder.decode(new Uint8Array(outputBuffer));
+        }
+
+        /////////////////////////////////////////////////////////////
+        const code = document.getElementById('code');
+        const input = document.getElementById('input');
+        const output = document.getElementById('output');
+        const exitCode = document.getElementById('exitCode');
+        const stack = document.getElementById('stack');
+        const stackWrapper = document.getElementById('stackWrapper');
+        const memory = document.getElementById('memory');
+        const memoryWrapper = document.getElementById('memoryWrapper');
+
+        const editor = CodeMirror.fromTextArea(code, { lineNumbers: true, lineWrapping: true });
+        function selectLine(line) {
+            const ch = editor.getLine(line).length
+            editor.setSelection({ line, ch: 0 }, { line, ch })
+        }
+
+        let isRunning = false;
+
+        function doStart() {
+            isRunning = true;
+            // code.disabled = true;
+            input.disabled = true;
+            setInput(input.value);
+            resetOutput();
+            exitCode.innerText = '';
+            output.innerText = '';
+        }
+
+        function doFinish() {
+            isRunning = false;
+            // code.disabled = false;
+            input.disabled = false;
+        }
+
+
+        /** @type {number[][]} */
+        let _stacks = [];
+        let _memory = {};
+        function showStack() {
+            stack.innerText = _stacks.map(
+                (_stack, i) => `${STACK_NAMES[i]}: ` + _stack.map(x => x.toString()).join(' ')
+            ).join('\n')
+        }
+        function showMemory() {
+            memory.innerText = JSON.stringify(_memory)
+        }
+
+        let _instNo = 1;
+        let commands = [];
+        function doSingle() {
+            if (!isRunning) {
+                doStart();
+                stackWrapper.className = ''
+                memoryWrapper.className = ''
+                _stacks = [[], [], [], [], [],];
+                _memory = {};
+                commands = parse(editor.getValue());
+                _instNo = 1;
+            } else {
+                try {
+                    _instNo = interpretSingle(_instNo, commands[_instNo - 1], _stacks, _memory, ioUtils)
+                    output.innerText = updateOutput();
+                    if (1 > _instNo || _instNo > commands.length) {
+                        _instNo = 1;
+                        let _exitCode = -1 in _memory ? _memory[-1] : 0
+                        exitCode.innerText = '' + _exitCode
+                        doFinish();
+                    }
+                } catch (error) {
+                    output.innerText = updateOutput() + `\n${_instNo}번줄: ${error.message}`;
+                    exitCode.innerText = '1'
+                    doFinish();
                 }
-
-                if (pos >= inputBuffer.length) return -1;
-                const byte = inputBuffer[pos];
-                pos += 1;
-                return byte;
             }
-
-            /** @type{number[]} */
-            let outputBuffer = [];
-            function write(addr, value) {
-                outputBuffer.push(value)
+            if (isRunning) {
+                selectLine(_instNo - 1)
+            } else {
+                editor.setCursor({ line: _instNo - 1, ch: 0 });
             }
-            const decoder = new TextDecoder(); 
-            function flush() {
-                const decoded = decoder.decode(new Uint8Array(outputBuffer));
-                outputBuffer = [];
-                return decoded;
+            showStack();
+            showMemory();
+        }
+
+        function doContinue() {
+            try {
+                while (1 <= _instNo && _instNo <= commands.length) {
+                    try {
+                        _instNo = interpretSingle(_instNo, commands[_instNo - 1], _stacks, _memory, ioUtils)
+                    } catch (error) {
+                        throw new Error(`${_instNo}번줄: ${error.message}`)
+                    }
+                }
+                _instNo = 1;
+                let _exitCode = -1 in _memory ? _memory[-1] : 0
+                exitCode.innerText = '' + _exitCode
+                output.innerText = updateOutput();
+            } catch (error) {
+                exitCode.innerText = '1';
+                output.innerText = updateOutput() + '\n' + error.message;
             }
-        </script>
-        <script type="module">
-            import {run} from './src/main.js';
-            const code = document.getElementById('code');
-            const input = document.getElementById('input');
-            const output = document.getElementById('output');
-            const exitCode = document.getElementById('exitCode');
+            editor.setCursor({ line: _instNo - 1, ch: 0 });
+        }
 
-            document.getElementById("runButton").addEventListener("click", function () {
-                setInput(input.value);
+        function doRun() {
+            stackWrapper.className = 'hidden'
+            memoryWrapper.className = 'hidden'
+            if (isRunning) return doContinue();
 
-                exitCode.innerText = '' + run(
-                    code.value, {read, write}
-                );
+            doStart()
+            try {
+                let _exitCode = run(editor.getValue(), ioUtils);
+                exitCode.innerText = '' + _exitCode
+                output.innerText = updateOutput();
+            } catch (error) {
+                exitCode.innerText = '1';
+                output.innerText = updateOutput() + '\n' + error.message;
+            }
+            doFinish();
+        }
 
-                output.innerText = flush();
-            })
-        </script>
-    </body>
+        document.getElementById("runButton").addEventListener("click", doRun)
+        document.getElementById("runSingleButton").addEventListener("click", doSingle)
+        document.getElementById("stopButton").addEventListener("click", function () {
+            if (!isRunning) return;
+            editor.setCursor({ line: _instNo - 1, ch: 0 });
+            doFinish();
+        })
+    </script>
+</body>
+
 </html>
